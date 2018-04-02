@@ -1,0 +1,8 @@
+12.17:
+When the newly created thread starts running thread function and sleeps for 1 second,the main function calls the Linux exit() function that terminates the whole process 
+and all threads associated with it including the currently sleeping one. So the thread is terminated before finishing sleeping and printing the string.
+
+12.25:
+The echo_cnt function is thread-safe.Although it changes shared variable value byte_cnt, it uses semaphores for mutual exclusion to make it thread safe.
+But the function is obviously not reentrant as it references shared value like byte_cnt.
+
