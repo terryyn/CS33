@@ -1,0 +1,73 @@
+testovf.c:
+_Bool testovf (long n)
+{
+  return n + 9223372036854775807 < n;
+}
+
+
+
+-O2:
+        xorl    %eax, %eax
+        ret
+
+The assembly code directly returns 0 without doing any computing operation, but I am not sure of the reason.
+So I change 9223372036854775807 to differnt numbers .
+It turns out that for any positive number, the code is alway 'xorl    %eax, %eax', for any negative number the code is always 'movl    $1, %eax'.
+So it seems that the -O2 optimization assumes that n+postive number < n automatically returns 0 regardless of the value of positive number, 
+it doesn't do operation and thus avoids the possible integer overflow.
+
+
+
+
+-O2 -fwrapv:
+        movabsq $9223372036854775807, %rax
+        addq    %rdi, %rax
+        cmpq    %rdi, %rax
+        setl    %al
+        ret
+
+
+-fwrapv wraps for signed arithmetic operation even there is overflow,
+so the compiler actually tries to calculate n + 9223372036854775807 and compares it to n.
+I write the code and try different values of n:
+
+int main()
+{
+  long n=1;
+  printf("%d",testovf(n));
+  return 0;
+}
+
+The code prints 1 for every positive n, as n + 9223372036854775807 will cause a integer overflow and results in a negative number,which is < n.
+The code prints 0 for every negative n, as n + 9223372036854775807 will cause a integer overflow and results in a positive number,which is > n.
+
+
+
+
+-O2 -fsanitize=undefined:
+.LFB0:
+        pushq   %rbp
+        pushq   %rbx
+        movabsq $9223372036854775807, %rdx
+        movq    %rdi, %rbp
+        movq    %rdi, %rbx
+        subq    $8, %rsp
+        addq    %rdx, %rbp
+        jo      .L6
+.L2:
+        cmpq    %rbx, %rbp
+        setl    %al
+        addq    $8, %rsp
+        popq    %rbx
+        popq    %rbp
+        ret
+.L6:
+        movq    %rdi, %rsi
+        movl    $.Lubsan_data0, %edi
+        call    __ubsan_handle_add_overflow
+        jmp     .L2
+
+The assembly code without the .cfi looks like this.
+-fsanitize=undefined optimization considers the possibility of integer overflow.
+If there is overflow, it will jump to L6 and will call a specific function to handle the overflow.
+If there is not, it will do calculation as normal and compare the values.

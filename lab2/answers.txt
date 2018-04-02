@@ -1,0 +1,39 @@
+1.
+544dfc  4a 8d 04 a5 02 00 00 00 lea 0x2(,%r12,4),%rax   rax=7fffffff73ab3b42
+%r12 here has value dfffffffdceaced0, so when multiplied by 4, the result is greater than INT_MAX and thus caused an overflow, got a wrong answer.
+
+2.
+In data.c we find the lines related to  most-negative-fixnum
+DEFVAR_LISP ("most-negative-fixnum", Vmost_negative_fixnum,
+Vmost_negative_fixnum = make_number (MOST_NEGATIVE_FIXNUM);
+
+most-negative-fixnum is equal to MOST_NEGATIVE_FIXNUM
+In lisp.h we find that MOST_NEGATIVE_FIXNUM= -1-MOST_POSITIVE_FIXNUM and MOST_POSITIVE_FIXNUM=(EMACS INT_MAX >> INTTYPEBITS)
+INT_MAX is 2^63-1 and INTTYPEBITS is set to GCTYPEBITS-1,GCTYPEBITS is defined as 3 so INTTYPEBITS=2
+so MOST_POSITIVE_FIXNUM is (2^63-1)>>2 = 2305843009213693951, so the most-negative_fixnum = -2305843009213693952
+
+
+3.
+ case Amult:
+          overflow |= INT_MULTIPLY_WRAPV (accum, next, &accum);
+ In intprops.h, the comment for INT_MULTIPLY_WRAPV is  Return 1 if the expression A <op> B would overflow.
+The multiplication of most-positive-fixnum definitely overflows, so the output is 1.
+
+4.
+Whenever there is possibility of integer overflow, the -fwrapv does not optimize to avoid it but do the operation as normal, thus gets the wrong answer.
+
+
+5.
+I use   gdb ~eggert/bin64/bin/emacs-25.2  and r -Q -batch -eval '(print (format-time-string "%Y-%m-%d %H:%M:%S %Z" nil (concat (make-string 1000 ?X) "0")))' .
+The output is:
+Program received signal SIGSEGV, Segmentation fault.
+0x00007ffff16be55b in __strcpy_sse2_unaligned () from /lib64/libc.so.6
+
+use disassemble-next-line on, I see the code with problem:
+0x00007ffff16be55b <__strcpy_sse2_unaligned+411>:    f3 0f 7f 7f f0  movdqu %xmm7,-0x10(%rdi)
+
+After stepping through and checking the info registers, I find out that %rdi is only 0xb, which is abnormal for a memory location, such low value memory address are usually restricted area of memory, so the direct cause of the segmentation error is memory corruption that the code tries to access restricted memory.
+I use backtrace then, it seems that 
+0x0000000000553272 in emacs_setenv_TZ (tzstring=0x1485319 'X' <repeats 135 times>, "T", 'X' <repeats 64 times>...) at editfns.c:2428 
+is the function being called before.
+So the possible reason for the memory corruption is that emacs_setenv_TZ was called too many times and it must overwrite the %rdi value during the process.
