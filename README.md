@@ -1,5 +1,7 @@
 # UCLA-CS33
-UCLA CS33  Introduction to Computer Architecture
+UCLA CS33  Introduction to Computer Architecture 
+
+2017 Fall
 
 Professor:Paul Eggert
 
