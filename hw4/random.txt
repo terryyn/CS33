@@ -1,0 +1,18 @@
+2.89:
+
+A.
+Yes it always yields 1. When conver int to a double, the exact numeric value can be preserved becasue double has greater range. dx and x thus have same value, so float(x)==float(dx)
+
+B.
+No it doesn't always yield 1. When x-y causes an overflow,for example, when x=INT_MAX,y=INT_MIN, x-y causes an overflow and wraps around a negative number, so (double)(x-y) is negative.
+But dx-dy will be the correct numeric value of INT_MAX-INT_MIN which is positive, because double is able to store such a big number. In this case, dx-dy == (double)(x-y) yields 0.
+
+C.
+Yes it always yields 1. The range of double is much bigger than int, so there is no concern of rounding as double can have 52-bit precision but the maximum result of dx+dy+dz requires 33-bit precision. The associativity in addition holds in this condition. 
+
+D.
+No it doesn't always yield 1. The range of dx*dy*dz is approximately - 2^96 to 2^96, but double can have at most 52-bit precision, so there is possibility of rounding during the process and the associativity in multiplication doesn't always hold. 
+An example of it is that dx=x= (2^30)-1  dy=y=(2^24)-1  dz=z=2^-23. dx*dy will be a 53 bit number with LS bit 1,so dx*dy will be rounded.  dy*dz, on the other side, will not be rounded as the result requires less than 52 bit precision and dx*(dy*dz) will not be rounded. (dx*dy)*dz then will have different value from dx*(dy*dz).  (dx*dy)*dz == dx*(dy*dz) yields 0. 
+
+E.
+No it doesn't always yields 1. For example, when x=dx=0, z=dz=1, dx/dx is infinity but dz/dz is 1. dx/dx == dz/dz yields 0.
