@@ -1,0 +1,118 @@
+1.
+download the material into the folder
+tar -xvzf openmplab.tgz
+
+2.
+cd openmplab
+make seq
+./seq
+FUNC TIME : 0.771933
+TOTAL TIME : 2.612870
+
+make clean
+make seq
+./seq
+FUNC TIME : 0.796610
+TOTAL TIME : 2.603399
+
+gprof seq | less
+Each sample counts as 0.01 seconds.
+  %   cumulative   self              self     total
+ time   seconds   seconds    calls  ms/call  ms/call  name
+ 74.78      0.59     0.59       15    39.39    40.27  func1
+  8.87      0.66     0.07  5177344     0.00     0.00  rand2
+  5.07      0.70     0.04   491520     0.00     0.00  findIndexBin
+  5.07      0.74     0.04        1    40.05    96.84  addSeed
+  2.54      0.76     0.02        2    10.01    10.01  init
+  1.27      0.77     0.01       15     0.67     0.67  func2
+  1.27      0.78     0.01        1    10.01    10.01  imdilateDisk
+  1.27      0.79     0.01                             sequence
+  0.00      0.79     0.00   983042     0.00     0.00  round
+  0.00      0.79     0.00       16     0.00     0.00  dilateMatrix
+  0.00      0.79     0.00       15     0.00     0.00  func3
+  0.00      0.79     0.00       15     0.00     0.00  func4
+  0.00      0.79     0.00       15     0.00     2.67  func5
+  0.00      0.79     0.00       15     0.00     0.00  rand1
+  0.00      0.79     0.00        2     0.00     0.00  get_time
+  0.00      0.79     0.00        1     0.00     0.00  elapsed_time
+  0.00      0.79     0.00        1     0.00     0.00  fillMatrix
+  0.00      0.79     0.00        1     0.00     0.00  func0
+
+so based on Amdahl's law, speeding up func1 should be most efficient as it takes most of the time.
+
+3.
+emacs func.c
+modify all the for loops by adding openmp
+I first use 32 parallel threads, but turns out that is only 3x speedup,
+so after several experiments, I find out the program is fastest when number of threads used is 29 or 30 although I don't know the reason.
+
+The performance really differs when working on 07 and 09 servers.
+
+make clean
+make omp
+./omp
+FUNC TIME : 0.044985
+TOTAL TIME : 1.980702
+
+so we get 0.796610/0.044985 = 17.7x speedup,a lot above x3.5 speedup requirements.
+
+4.
+make check
+gcc -o omp  -O3 -fopenmp filter.c main.c func.c util.c -lm
+cp omp filter
+./filter
+FUNC TIME : 0.037828
+TOTAL TIME : 1.820988
+diff --brief correct.txt output.txt
+
+nothing is output, so the result is the same and correct.
+
+5.
+make clean
+make omp MTRACE=1
+./omp
+make checkmem
+
+mtrace filter mtrace.out || true
+env: ./filter: No such file or directory
+
+Memory not freed:
+-----------------
+           Address     Size     Caller
+addr2line: 'filter': No such file
+0x0000000000ff4070   0x1e90  at
+0x0000000000ff5f10     0xc0  at
+addr2line: 'filter': No such file
+0x0000000000ff5fe0     0xf8  at
+addr2line: 'filter': No such file
+0x0000000000ff60e0    0x240  at
+0x0000000000ff6330    0x240  at
+0x0000000000ff6580    0x240  at
+0x0000000000ff67d0    0x240  at
+0x0000000000ff6a20    0x240  at
+0x0000000000ff6c70    0x240  at
+0x0000000000ff6ec0    0x240  at
+0x0000000000ff7110    0x240  at
+0x0000000000ff7360    0x240  at
+0x0000000000ff75b0    0x240  at
+0x0000000000ff7800    0x240  at
+0x0000000000ff7a50    0x240  at
+0x0000000000ff7ca0    0x240  at
+0x0000000000ff7ef0    0x240  at
+0x0000000000ff8140    0x240  at
+0x0000000000ff8390    0x240  at
+0x0000000000ff85e0    0x240  at
+0x0000000000ff8830    0x240  at
+0x0000000000ff8a80    0x240  at
+0x0000000000ff8cd0    0x240  at
+0x0000000000ff8f20    0x240  at
+0x0000000000ff9170    0x240  at
+0x0000000000ff93c0    0x240  at
+0x0000000000ff9610    0x240  at
+0x0000000000ff9860    0x240  at
+0x0000000000ff9ab0    0x240  at
+0x0000000000ff9d00    0x240  at
+0x0000000000ff9f50    0x240  at
+0x0000000000ffa1a0    0x240  at
+
+based on what TA said, it is an false alarm from checkmem, so everything is fine.
