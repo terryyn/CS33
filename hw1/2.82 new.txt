@@ -1,0 +1,14 @@
+A: No it yields 0 when x= the most mininum number and y= any other number, so x<y but -x=x<-y
+
+B: Yes it always yields 1 because the computer executes the mulitplication of constant by distributing it to multiple shifts, so 17*y= y<<4+y  15*x=x<<4-x
+
+C: Yes it always yields 1 because x+~x=y+~y=(x+y)+~(x+y)=-1 so ~x+~y+1= (-1-x)+(-1-y)+1=-1-(x+y)=~(x+y)
+
+D: No it always yields 0 because unsigned operation on the left side yields only unsigned result while the right hand side is always signed.
+
+E: Yes it always yields 1 because doing right shift>>2 and then left shift<<2 doesn't change any bits  but the two least significant bits to 00, so it is always smaller than the original.
+
+F: No it yields 0 when x is negative number because the right side will 
+
+G: Yes it always yields 1 because x%128 is equal to x-(x>>7)<<7, so x%128 is equal to the last 7 bits of x. 127 is 01111111, so x&127 is equal to the last 7 bits of x as well.
+

@@ -1,0 +1,5 @@
+A:  The conditional test always succeeds because sizeof(val) returns a size_t type which is unsigned number.
+    When one of the objects in the operation is unsigned, the result of the operation is implicitly switched
+    to unsigned number. The result of conditional test is thus always >=0 and it always succeeds.
+B:  if(maxbytes-(int)sizeof(val)>=0)
+    
